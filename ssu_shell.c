@@ -1041,9 +1041,6 @@ void get_procnum(int graphflag){
 				ttopgraph[k][S] = (char*)malloc(MAX_TOKEN_SIZE*sizeof(char));
 				memset(ttopgraph[k][S],0,MAX_TOKEN_SIZE);
 	fscanf(fp,"%s",ttopgraph[k][S]);
-for(int i=1;i<=36;i++){
-		fscanf(fp,"%s",tmp);
-	}
 				ttopgraph[k][VIRT] = (char*)malloc(MAX_TOKEN_SIZE*sizeof(char));
 				ttopgraph[k][RES] = (char*)malloc(MAX_TOKEN_SIZE*sizeof(char));
 				ttopgraph[k][SHR] = (char*)malloc(MAX_TOKEN_SIZE*sizeof(char));
@@ -1052,7 +1049,11 @@ for(int i=1;i<=36;i++){
 				memset(ttopgraph[k][RES],0,MAX_TOKEN_SIZE);
 				memset(ttopgraph[k][SHR],0,MAX_TOKEN_SIZE);
 				memset(ttopgraph[k][MEM],0,MAX_TOKEN_SIZE);
+	int vmsizeyes=0;
+for(int i=1;i<=36;i++){
+		fscanf(fp,"%s",tmp);
 	if(strstr(tmp,"VmSize:")){
+		vmsizeyes=1;
 		fscanf(fp,"%s",ttopgraph[k][VIRT]);
 	for(int i=1;i<=11;i++)
 		fscanf(fp,"%s",tmp);
@@ -1063,9 +1064,11 @@ for(int i=1;i<=36;i++){
 	sprintf(ttopgraph[k][MEM],"%0.1f",memper);
 	for(int i=1;i<=5;i++)
 		fscanf(fp,"%s",tmp);
-	fscanf(fp,"%s",ttopgraph[k][SHR]);
+		fscanf(fp,"%s",ttopgraph[k][SHR]);
+		break;
 	}
-	else{
+}
+	if(!vmsizeyes){
 		strcpy(ttopgraph[k][VIRT],"0");
 		strcpy(ttopgraph[k][RES],"0");
 		strcpy(ttopgraph[k][SHR],"0");
