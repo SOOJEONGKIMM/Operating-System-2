@@ -64,7 +64,7 @@ static time_t seconds_since_1970;
 
 void open_task(int k, int pidnum, char* procstate,int plusflag);
 //void open_task();
-void open_status(int k, int session, char* procstate);
+void open_status(int k, int session, char* procstate, char* cmdline);
 void get_psuser(char* statfile, int k);
 void get_pstty(int tty_maj,int tty_min, int k);
 void run_ttop();
@@ -352,10 +352,19 @@ void get_username(int opt){
 
 }
 void ppsprint_aux(){
+	struct winsize w;//terminal size
+	ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
 
 	printf("%s %9s %3s %4s %4s %3s %5s %6s %6s %6s %9s \n","USER","PID","%CPU","%MEM","VSZ","RSS","TTY","STAT","START","TIME","COMMAND");
 	for(int l=0;l<totaltasks;l++){
-			printf("%s %9s %3s %4s %4s %3s %5s %6s %6s %6s %9s \n",ppsinfo[l][_USER],ppsinfo[l][_PID],ppsinfo[l][_CPU],ppsinfo[l][_MEM],ppsinfo[l][_VSZ],ppsinfo[l][_RSS], ppsinfo[l][_TTY],ppsinfo[l][_STAT],ppsinfo[l][_START], ppsinfo[l][_TIME], ppsinfo[l][_COMMAND]);
+			int cmdlen=w.ws_col;//custom with terminal column width
+			char tmpcmd[BUFSIZE*10];
+			memset(tmpcmd,0,BUFSIZE);
+			char tmp[BUFSIZE];
+			memset(tmp,0,BUFSIZE);
+			sprintf(tmpcmd,"%s %9s %3s %4s %4s %3s %5s %6s %6s %6s %9s",ppsinfo[l][_USER],ppsinfo[l][_PID],ppsinfo[l][_CPU],ppsinfo[l][_MEM],ppsinfo[l][_VSZ],ppsinfo[l][_RSS], ppsinfo[l][_TTY],ppsinfo[l][_STAT],ppsinfo[l][_START], ppsinfo[l][_TIME], ppsinfo[l][_COMMAND]);
+			strncpy(tmp,tmpcmd,cmdlen);
+			printf("%s\n",tmp);
 	}
 
 
@@ -376,12 +385,11 @@ void ppsprint_u(char *username){
 	for(int l=0;l<totaltasks;l++){
 		if(!strcmp(ppsinfo[l][_USER],username)){
 		if(strcmp(ppsinfo[l][_TTY],"?")){
-			int cmdlen=w.ws_col;//strlen(ppsinfo[l][_COMMAND]);
+			int cmdlen=w.ws_col;//custom with terminal column width
 			char tmpcmd[BUFSIZE*10];
 			memset(tmpcmd,0,BUFSIZE);
 			char tmp[BUFSIZE];
 			memset(tmp,0,BUFSIZE);
-			//strncpy(tmpcmd,ppsinfo[l][_COMMAND],cmdlen);
 			sprintf(tmpcmd,"%3s %5s %3s %4s %4s %3s %5s %6s %6s %6s %9s",ppsinfo[l][_USER],ppsinfo[l][_PID],ppsinfo[l][_CPU],ppsinfo[l][_MEM],ppsinfo[l][_VSZ],ppsinfo[l][_RSS], ppsinfo[l][_TTY],ppsinfo[l][_STAT],ppsinfo[l][_START], ppsinfo[l][_TIME], ppsinfo[l][_COMMAND]);
 			strncpy(tmp,tmpcmd,cmdlen);
 			printf("%s\n",tmp);
@@ -763,8 +771,8 @@ void get_psproc(int psopt){
 	FILE *cmdfp;
 	cmdfp=fopen(cmdfile,"r");
 
-				ppsinfo[k][_COMMAND] = (char*)malloc(2*MAX_TOKEN_SIZE*sizeof(char));
-				memset(ppsinfo[k][_COMMAND],0,2*MAX_TOKEN_SIZE);
+				ppsinfo[k][_COMMAND] = (char*)malloc(4*MAX_TOKEN_SIZE*sizeof(char));
+				memset(ppsinfo[k][_COMMAND],0,4*MAX_TOKEN_SIZE);
 	char cmdline[BUFSIZE];
 	memset(cmdline,0,BUFSIZE);
 	
@@ -777,7 +785,7 @@ void get_psproc(int psopt){
 
 
 	//proc/pid/status
-	open_status(k,session[k],state);
+	open_status(k,session[k],state,cmdline);
 
 	//proc/pid/task dir (checkout multi thread)
 	open_task(k,kpid,state,plusflag);
@@ -833,7 +841,7 @@ void open_task(int k,int kpid, char *procstate,int plusflag){
 
 
 }
-void open_status(int k, int session, char* procstate){
+void open_status(int k, int session, char* procstate, char* cmdline){
 	FILE *fp;
 	char statusfile[BUFSIZE];
 	char tmp[BUFSIZE];
@@ -841,7 +849,16 @@ void open_status(int k, int session, char* procstate){
 	memset(statusfile,0,BUFSIZE);
 	sprintf(statusfile,"/proc/%s/status",ppsinfo[k][_PID]);
 	fp = fopen(statusfile,"r");
-	for(int i=1;i<=8;i++)
+		fscanf(fp,"%s",tmp);
+
+	if(strlen(cmdline)==0){
+		fscanf(fp,"%s",cmdline);
+		sprintf(ppsinfo[k][_COMMAND],"[%s]",cmdline);
+	}
+	else
+		fscanf(fp,"%s",tmp);
+
+	for(int i=1;i<=6;i++)
 		fscanf(fp,"%s",tmp);
 	int tgid[BUFSIZE];
 	fscanf(fp,"%d",&tgid[k]);//9
