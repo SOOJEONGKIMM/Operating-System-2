@@ -868,14 +868,15 @@ void open_status(int k, int session, char* procstate, char* cmdline){
 		procstate[end++]='s';
 		procstate[end++]='\0';
 	}
-	for(int i=1;i<=33;i++){
-		fscanf(fp,"%s",tmp);
-	}
 				ppsinfo[k][_MEM] = (char*)malloc(MAX_TOKEN_SIZE*sizeof(char));
 				memset(ppsinfo[k][_VSZ],0,MAX_TOKEN_SIZE);
 				memset(ppsinfo[k][_RSS],0,MAX_TOKEN_SIZE);
 				memset(ppsinfo[k][_MEM],0,MAX_TOKEN_SIZE);
+	int vmsizeyes=0;
+	for(int i=1;i<=41;i++){
+		fscanf(fp,"%s",tmp);
 	if(strstr(tmp,"VmSize:")){
+		vmsizeyes=1;
 		fscanf(fp,"%s",ppsinfo[k][_VSZ]);
 	fscanf(fp,"%s",tmp);
 	if(strstr(tmp,"VmLck:")){
@@ -897,8 +898,10 @@ void open_status(int k, int session, char* procstate, char* cmdline){
 	sprintf(ppsinfo[k][_MEM],"%0.1f",memper);
 	for(int i=1;i<=5;i++)
 		fscanf(fp,"%s",tmp);
+	break;
 	}
-	else{
+	}//for 41 end
+	if(!vmsizeyes){
 		strcpy(ppsinfo[k][_VSZ],"0");
 		strcpy(ppsinfo[k][_RSS],"0");
 		strcpy(ppsinfo[k][_MEM],"0.0");
