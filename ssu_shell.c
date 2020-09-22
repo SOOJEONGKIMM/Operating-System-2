@@ -369,11 +369,22 @@ void ppsprint_a(){
 	}
 }
 void ppsprint_u(char *username){
-	printf("%9s %5s %3s %4s %4s %3s %5s %6s %6s %6s %9s \n","USER","PID","%CPU","%MEM","VSZ","RSS","TTY","STAT","START","TIME","COMMAND");
+	struct winsize w;//terminal size
+	ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
+	printf("lines:%d  columns:%d\n",w.ws_row, w.ws_col);
+	printf("%3s %5s %3s %4s %4s %3s %5s %6s %6s %6s %9s \n","USER","PID","%CPU","%MEM","VSZ","RSS","TTY","STAT","START","TIME","COMMAND");
 	for(int l=0;l<totaltasks;l++){
 		if(!strcmp(ppsinfo[l][_USER],username)){
 		if(strcmp(ppsinfo[l][_TTY],"?")){
-			printf("%9s %5s %3s %4s %4s %3s %5s %6s %6s %6s %9s \n",ppsinfo[l][_USER],ppsinfo[l][_PID],ppsinfo[l][_CPU],ppsinfo[l][_MEM],ppsinfo[l][_VSZ],ppsinfo[l][_RSS], ppsinfo[l][_TTY],ppsinfo[l][_STAT],ppsinfo[l][_START], ppsinfo[l][_TIME], ppsinfo[l][_COMMAND]);
+			int cmdlen=w.ws_col;//strlen(ppsinfo[l][_COMMAND]);
+			char tmpcmd[BUFSIZE*10];
+			memset(tmpcmd,0,BUFSIZE);
+			char tmp[BUFSIZE];
+			memset(tmp,0,BUFSIZE);
+			//strncpy(tmpcmd,ppsinfo[l][_COMMAND],cmdlen);
+			sprintf(tmpcmd,"%3s %5s %3s %4s %4s %3s %5s %6s %6s %6s %9s",ppsinfo[l][_USER],ppsinfo[l][_PID],ppsinfo[l][_CPU],ppsinfo[l][_MEM],ppsinfo[l][_VSZ],ppsinfo[l][_RSS], ppsinfo[l][_TTY],ppsinfo[l][_STAT],ppsinfo[l][_START], ppsinfo[l][_TIME], ppsinfo[l][_COMMAND]);
+			strncpy(tmp,tmpcmd,cmdlen);
+			printf("%s\n",tmp);
 		}
 		}
 	}
