@@ -50,9 +50,11 @@ void handle_alarm(int sig);
 static void redirect(int oldfd, int newfd);
 
 int ppsopt_parse (char **buf);
+void get_ttyname();
 void get_username();
 enum ppsopt{UOPT, XOPT, UXOPT };
 void ppsprint_aux();
+void ppsprint_none(char *ttyname);
 void ppsprint_ax();
 void ppsprint_au();
 void ppsprint_a();
@@ -292,17 +294,22 @@ int ppsopt_parse (char **buf){
 	int uopt=0;
 	int xopt=0;
 	int noneopt=0;
+	int len;
 	static char *optptr;
-	optptr = buf[1];
 
 	if(buf[1]==NULL){
 		noneopt=1;
-		printf("none\n");
 	}
 	else{
+	optptr = buf[1];
+	len=strlen(buf[1]);
 
 	while(1){
-		if(*optptr=='a')
+		if(*optptr=='-'){
+			printf("no such pps option.\n");
+			return 0;
+		}
+		else if(*optptr=='a')
 				aopt=1;
 		else if(*optptr=='u')
 				uopt=1;
@@ -313,24 +320,44 @@ int ppsopt_parse (char **buf){
 
 	}
 	}
-	printf("a%d u%d x%d n%d \n",aopt,uopt,xopt,noneopt);
 
-	if(aopt&&!uopt&&!xopt)
+	if(noneopt)
+		get_ttyname();
+	else if(aopt&&!uopt&&!xopt&&len==1)
 		ppsprint_a();
-	else if(uopt&&!aopt&&!xopt)
+	else if(uopt&&!aopt&&!xopt&&len==1)
 		get_username(UOPT);
-	else if(xopt&&!aopt&&!uopt)
+	else if(xopt&&!aopt&&!uopt&&len==1)
 		get_username(XOPT);
-	else if(aopt&&uopt&&xopt)
+	else if(aopt&&uopt&&xopt&&len==3)
 		ppsprint_aux();
-	else if(aopt&&xopt&&!uopt)
+	else if(aopt&&xopt&&!uopt&&len==2)
 		ppsprint_ax();
-	else if(aopt&&uopt&&!xopt)
+	else if(aopt&&uopt&&!xopt&&len==2)
 		ppsprint_au();
-	else if(!aopt&&uopt&&xopt)
+	else if(!aopt&&uopt&&xopt&&len==2)
 		get_username(UXOPT);
+	else{
+		printf("no such pps option.\n");
+		return 0;
+	}
 
 }
+void get_ttyname(){
+	printf("hi\n");
+
+	char *ret, tty[40];
+	if((ret=ttyname(STDIN_FILENO))==NULL)
+		perror("ttyname error");
+	else{
+		strcpy(tty,ret);
+		printf("current:%s\n",tty);
+	}
+	char *ptr=strrchr(tty,'p');
+	printf("ptr:%s\n",ptr);
+	ppsprint_none(ptr);
+}
+
 void get_username(int opt){
 	FILE *fd;
 	char filename[]="/etc/passwd";
@@ -381,12 +408,32 @@ void ppsprint_aux(){
 
 
 }
+void ppsprint_none(char *ttyname){
+	printf("%5s %9s %6s %s \n","PID","TTY","TIME","COMMAND");
+	for(int l=0;l<totaltasks;l++){
+		if(!strcmp(ppsinfo[l][_TTY],ttyname))
+			printf("%5s %9s %6s  %s \n",ppsinfo[l][_PID],ppsinfo[l][_TTY],ppsinfo[l][_TIME],ppsinfo[l][_COMMAND]);
+	}
+
+
+
+}
 void ppsprint_a(){
 
+	struct winsize w;//terminal size
+	ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
 	printf("%5s %9s %6s %6s %s \n","PID","TTY","STAT","TIME","COMMAND");
 	for(int l=0;l<totaltasks;l++){
-		if(strcmp(ppsinfo[l][_TTY],"?"))
-			printf("%5s %9s %6s %6s %s \n",ppsinfo[l][_PID],ppsinfo[l][_TTY],ppsinfo[l][_STAT],ppsinfo[l][_TIME],ppsinfo[l][_COMMAND]);
+		if(strcmp(ppsinfo[l][_TTY],"?")){
+			int cmdlen=w.ws_col;//custom with terminal column width
+			char tmpcmd[BUFSIZE*10];
+			memset(tmpcmd,0,BUFSIZE);
+			char tmp[BUFSIZE];
+			memset(tmp,0,BUFSIZE);
+			sprintf(tmpcmd,"%5s %9s %6s %6s %s",ppsinfo[l][_PID],ppsinfo[l][_TTY],ppsinfo[l][_STAT],ppsinfo[l][_TIME],ppsinfo[l][_COMMAND]);
+			strncpy(tmp,tmpcmd,cmdlen);
+			printf("%s\n",tmp);
+		}
 	}
 }
 void ppsprint_au(){
@@ -426,7 +473,7 @@ void ppsprint_ax(){
 void ppsprint_u(char *username){
 	struct winsize w;//terminal size
 	ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
-	printf("%3s %5s %3s %4s %4s %3s %5s %6s %6s %6s %9s \n","USER","PID","%CPU","%MEM","VSZ","RSS","TTY","STAT","START","TIME","COMMAND");
+	printf("%3s %5s %3s %4s %6s %6s %5s %5s %6s %6s %9s \n","USER","PID","%CPU","%MEM","VSZ","RSS","TTY","STAT","START","TIME","COMMAND");
 	for(int l=0;l<totaltasks;l++){
 		if(!strcmp(ppsinfo[l][_USER],username)){
 		if(strcmp(ppsinfo[l][_TTY],"?")){
@@ -435,7 +482,7 @@ void ppsprint_u(char *username){
 			memset(tmpcmd,0,BUFSIZE);
 			char tmp[BUFSIZE];
 			memset(tmp,0,BUFSIZE);
-			sprintf(tmpcmd,"%3s %5s %3s %4s %4s %3s %5s %6s %6s %6s %9s",ppsinfo[l][_USER],ppsinfo[l][_PID],ppsinfo[l][_CPU],ppsinfo[l][_MEM],ppsinfo[l][_VSZ],ppsinfo[l][_RSS], ppsinfo[l][_TTY],ppsinfo[l][_STAT],ppsinfo[l][_START], ppsinfo[l][_TIME], ppsinfo[l][_COMMAND]);
+			sprintf(tmpcmd,"%3s %5s %3s %4s %6s %6s %5s %5s %6s %6s %9s",ppsinfo[l][_USER],ppsinfo[l][_PID],ppsinfo[l][_CPU],ppsinfo[l][_MEM],ppsinfo[l][_VSZ],ppsinfo[l][_RSS], ppsinfo[l][_TTY],ppsinfo[l][_STAT],ppsinfo[l][_START], ppsinfo[l][_TIME], ppsinfo[l][_COMMAND]);
 			strncpy(tmp,tmpcmd,cmdlen);
 			printf("%s\n",tmp);
 		}
@@ -462,10 +509,19 @@ void ppsprint_ux(char *username){
 	}
 }
 void ppsprint_x(char *username){
+	struct winsize w;//terminal size
+	ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
 	printf("%5s %9s %6s %6s %s \n","PID","TTY","STAT","TIME","COMMAND");
 	for(int l=0;l<totaltasks;l++){
 		if(!strcmp(ppsinfo[l][_USER],username)){
-			printf("%5s %9s %6s %6s %s \n",ppsinfo[l][_PID],ppsinfo[l][_TTY],ppsinfo[l][_STAT],ppsinfo[l][_TIME],ppsinfo[l][_COMMAND]);
+			int cmdlen=w.ws_col;//custom with terminal column width
+			char tmpcmd[BUFSIZE*10];
+			memset(tmpcmd,0,BUFSIZE);
+			char tmp[BUFSIZE];
+			memset(tmp,0,BUFSIZE);
+			sprintf(tmpcmd,"%5s %9s %6s %6s %s",ppsinfo[l][_PID],ppsinfo[l][_TTY],ppsinfo[l][_STAT],ppsinfo[l][_TIME],ppsinfo[l][_COMMAND]);
+			strncpy(tmp,tmpcmd,cmdlen);
+			printf("%s\n",tmp);
 		}
 	}
 }
