@@ -282,7 +282,6 @@ static void redirect(int oldfd, int newfd){
 }
 enum psopt{NONE,_A,_U,_X, _AU, _AX, _UX, _AUX};
 void run_pps(char **buf){
-	printf("pps....\n");
 get_mem(0);
 get_psproc(NONE);
 ppsopt_parse(buf);
@@ -344,17 +343,14 @@ int ppsopt_parse (char **buf){
 
 }
 void get_ttyname(){
-	printf("hi\n");
 
 	char *ret, tty[40];
 	if((ret=ttyname(STDIN_FILENO))==NULL)
 		perror("ttyname error");
 	else{
 		strcpy(tty,ret);
-		printf("current:%s\n",tty);
 	}
 	char *ptr=strrchr(tty,'p');
-	printf("ptr:%s\n",ptr);
 	ppsprint_none(ptr);
 }
 
@@ -410,9 +406,10 @@ void ppsprint_aux(){
 }
 void ppsprint_none(char *ttyname){
 	printf("%5s %9s %6s %s \n","PID","TTY","TIME","COMMAND");
+	char time[BUFSIZE]="00:00:00";
 	for(int l=0;l<totaltasks;l++){
 		if(!strcmp(ppsinfo[l][_TTY],ttyname))
-			printf("%5s %9s %6s  %s \n",ppsinfo[l][_PID],ppsinfo[l][_TTY],ppsinfo[l][_TIME],ppsinfo[l][_COMMAND]);
+			printf("%5s %9s %6s  %s \n",ppsinfo[l][_PID],ppsinfo[l][_TTY],time,ppsinfo[l][_COMMAND]);
 	}
 
 
@@ -529,11 +526,21 @@ void ppsprint_x(char *username){
 void handle_alarm(int sig){
 	print_flag=true;
 }
+static int mcol, mrow;
 void repeat_ttop() {
 	int ch;
-	WINDOW *mainwin;
-	//keypad(stdscr,TRUE);
-	mainwin=initscr();
+	WINDOW *new;
+	new=initscr();
+	keypad(stdscr,TRUE);
+
+	getmaxyx(stdscr, mrow, mcol);
+
+	curs_set(0);
+
+	
+
+	int rowcount=350;
+	new=newpad(rowcount+1,mcol);
 
 		if(signal(SIGALRM, handle_alarm)==SIG_ERR){
 			fprintf(stderr,"SIGALRM error\n");
@@ -543,10 +550,6 @@ void repeat_ttop() {
 		//curs_set(FALSE);
 		int i=0;
 		while(1){
-			/*ch=getch();
-			if(ch=='q')
-				break;
-				*/
 			if(print_flag){
 				run_ttop();
 				print_flag=false;
@@ -1013,7 +1016,7 @@ void open_status(int k, int session, char* procstate, char* cmdline){
 		fscanf(fp,"%s",ppsinfo[k][_RSS]);
 	int res=atoi(ppsinfo[k][_RSS]);
 	double memper=(double)res/(double)totalram;
-	sprintf(ppsinfo[k][_MEM],"%0.1f",memper);
+	sprintf(ppsinfo[k][_MEM],"%.1f",memper);
 	for(int i=1;i<=5;i++)
 		fscanf(fp,"%s",tmp);
 	break;
