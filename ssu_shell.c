@@ -79,7 +79,7 @@ void open_status(int k, int session, char* procstate, char* cmdline);
 void get_psuser(char* statfile, int k);
 void get_pstty(int tty_maj,int tty_min, int k);
 void run_ttop();
-void repeat_ttop();
+int repeat_ttop();
 void get_graph();
 int get_uptime(int ttopprint);
 void get_user();
@@ -714,15 +714,15 @@ void handle_alarm(int sig){
 	print_flag=true;
 }
 static int mcol, mrow;
-void repeat_ttop() {
+int repeat_ttop() {
 	int ch;
 	WINDOW *new;
 	new=initscr();
-	keypad(stdscr,TRUE);
+//	keypad(stdscr,TRUE);
 
 	getmaxyx(stdscr, mrow, mcol);
 
-	curs_set(0);
+//	curs_set(0);
 
 	
 
@@ -735,17 +735,21 @@ void repeat_ttop() {
 		}
 		alarm(1);
 		//curs_set(FALSE);
+		timeout(3000);	
 		int i=0;
-		while(1){
+		while(1){//ch=getch())!='q'){
 			if(print_flag){
 				run_ttop();
 				print_flag=false;
 				alarm(3);
 			}
+			if((ch=getch())=='q'){
+				endwin();
+				return 0;
+			}
 	
 		}
 	endwin();
-	refresh();
 
 
 }
@@ -767,12 +771,10 @@ void run_ttop(){
 	mvprintw(0,25,",  ");
 	//active user num
 	get_user();
-	refresh();
 	//load average
 	get_loadav();
 	//tasks(second line)
 	mvprintw(1,0,"Tasks: ");
-	refresh();
 	get_procnum(0);
 	//cpu(third line)
 	get_cpu();
@@ -780,6 +782,7 @@ void run_ttop(){
 	get_mem(1);
 	//pid user...
 	get_graph();
+	refresh();
 	//sleep(3);
 	//}*/
 
@@ -873,7 +876,6 @@ void get_user(){
 		if(u->ut_type==7&&strcmp(u->ut_user,c)==0){
 			cnt++;
 			mvprintw(0,27,"%d user,",cnt);
-	refresh();
 		}
 		u=getutent();
 	}
@@ -882,7 +884,6 @@ void get_loadav(){
 	double load[3];
 	if(getloadavg(load,3) != -1)
 		mvprintw(0,35,"  load average : %0.2f, %0.2f, %0.2f\n",load[0],load[1],load[2]);
-	refresh();
 }
 void get_psuser(char* statfile, int k){
 	struct passwd *upasswd;
@@ -1272,7 +1273,6 @@ void get_procnum(int graphflag){
 	totaltasks=cnt;
 	if(!graphflag){
 		mvprintw(1,6,"%ld total,  ",cnt);
-	refresh();
 	}
 	if(closedir(dir))
 		perror("closedir error\n");
@@ -1449,7 +1449,6 @@ for(int i=1;i<=36;i++){
 
 	if(!graphflag){
 		mvprintw(1,18,"%d running,  %d sleeping,   %d stopped,   %d zombie\n",runcnt,sleepcnt,stopcnt,zombiecnt);
-		refresh();
 	}
 
 }
@@ -1491,7 +1490,6 @@ void get_cpu(){//ttop third line
 		mvprintw(2,54,"%.1lf hi,  ",100.0*(double)diffjiff[HI]/(double)difftotal);
 		mvprintw(2,63,"%.1lf si,  ",100.0*(double)diffjiff[SI]/(double)difftotal);
 		mvprintw(2,72,"%.1lf st\n",100.0*(double)diffjiff[ST]/(double)difftotal);
-		refresh();
 		memcpy(jiff[0],jiff[1],sizeof(int)*8);
 		totaljiff[0]=totaljiff[1];
 
@@ -1516,7 +1514,6 @@ void get_mem(int ttopflag){
 	fscanf(fp,"%s %d %s",tmp1,&mem[BUFF],tmp2);
 	if(ttopflag){
 	mvprintw(3,0,"KiB Mem:  %d total,   %d free,   ",mem[TOTAL],mem[FREE]);
-	refresh();
 	}
 	int bu=mem[BUFF];
 	fscanf(fp,"%s %d %s",tmp1,&mem[CACHE],tmp2);
@@ -1536,22 +1533,18 @@ void get_mem(int ttopflag){
 	mem[USED]=mem[TOTAL]-mem[FREE]-bu-cac-mem[SRec];
 	if(ttopflag){
 	mvprintw(3,45,"%d used,   ",mem[USED]);
-	refresh();
 	}
 	int bc=bu+cac+mem[SRec];
 	if(ttopflag){
 	mvprintw(3,60,"%d buff/cache\n",bc);
-	refresh();
 
 	mvprintw(4,0,"KiB swap:  %d total,   ",swt);
 	mvprintw(4,27,"%d free,   ",mem[SWfree]);
-	refresh();
 	}
 	mem[SWused]=mem[SWtotal]-mem[SWfree];
 	if(ttopflag){
 	mvprintw(4,45,"%d used.   ",mem[SWused]);
 	mvprintw(4,60,"%d avail Mem\n\n",mem[AVAIL]);
-	refresh();
 	}
 	
 	totalram=mem[TOTAL]+mem[SWtotal];
