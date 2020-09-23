@@ -28,6 +28,10 @@
 #define BUFSIZE 512
 #define HZ 100 //getconf CLK_TCK (mine is 100)
 
+char match[BUFSIZE];
+int ppspipe=0;
+
+
 static char **pps_argv;
 char* ttopgraph[BUFSIZE][13]={{0}};
 enum ttopgraphh{PID, GUSER, PR, NI, VIRT, RES, SHR, S, CPU, MEM, TIME, COMMAND};
@@ -50,6 +54,7 @@ void handle_alarm(int sig);
 static void redirect(int oldfd, int newfd);
 
 int ppsopt_parse (char **buf);
+int ppsopt_pipeparse(char* buf);
 void get_ttyname();
 void get_username();
 enum ppsopt{UOPT, XOPT, UXOPT };
@@ -62,6 +67,7 @@ void ppsprint_ux(char *username);
 void ppsprint_u(char *username);
 void ppsprint_x(char *username);
 void run_pps();
+void run_ppspipe(char *buf);
 void get_psproc(int psopt);
 int get_cputime(ulong utime, ulong stime, ulong starttime, int seconds);
 
@@ -204,6 +210,17 @@ int main(int argc, char* argv[]) {
 						if(args[pos+1]==NULL){//last cmd 
 							redirect(in_fd, STDIN_FILENO);
 							tokens=tokenize(args[pos]);
+							if(strstr(args[pos-1],"pps")){
+								if(!strcmp(tokens[0],"grep")){
+									tokens=tokenize(args[pos]);
+									strcpy(match,tokens[1]);
+									ppspipe=1;
+									run_ppspipe(args[pos-1]);
+									ppspipe=0;
+									memset(match,0,BUFSIZE);
+								}
+							}
+
 							if(tokens[0]==NULL)
 								printf("SSUShell : Incorrect command\n");
 							if(execvp(tokens[0],tokens)<0){
@@ -216,6 +233,7 @@ int main(int argc, char* argv[]) {
 							redirect(in_fd, STDIN_FILENO);
 							redirect(fd[1], STDOUT_FILENO);
 							tokens = tokenize(args[pos]);
+
 							if(execvp(tokens[0],tokens)<0){
 								printf("SSUShell : Incorrect command\n");
 								exit(-1);
@@ -250,7 +268,6 @@ int main(int argc, char* argv[]) {
 							run_pps(tokens);
 						}
 						else{
-							printf("tok:%s\n",tokens[1]);
 							if(execvp(buf, tokens)<0){
 								printf("SSUShell : Incorrect command\n");
 								exit(-1);
@@ -287,6 +304,71 @@ get_psproc(NONE);
 ppsopt_parse(buf);
 
 }
+void run_ppspipe(char *buf){
+get_mem(0);
+get_psproc(NONE);
+char *ptr=strrchr(buf,'s');
+int end=strlen(ptr);
+for(int i=1;i<end;i++){
+	ptr[i-1]=ptr[i];
+}
+
+ppsopt_pipeparse(ptr);
+}
+int ppsopt_pipeparse(char* buf){
+	int aopt=0;
+	int uopt=0;
+	int xopt=0;
+	int noneopt=0;
+	int len;
+	static char *optptr;
+	if(!strcmp(buf," ")){
+		noneopt=1;
+	}
+	else{
+		optptr=buf;
+		len=strlen(buf);
+
+	while(1){
+		if(*optptr=='-'){
+			printf("no such pps option.\n");
+			return 0;
+		}
+		else if(*optptr=='a')
+				aopt=1;
+		else if(*optptr=='u')
+				uopt=1;
+		else if(*optptr=='x')
+				xopt=1;
+		if(!*++optptr)
+			break;
+
+	}
+	}
+
+	if(noneopt)
+		get_ttyname();
+	else if(aopt&&!uopt&&!xopt)
+		ppsprint_a();
+	else if(uopt&&!aopt&&!xopt)
+		get_username(UOPT);
+	else if(xopt&&!aopt&&!uopt)
+		get_username(XOPT);
+	else if(aopt&&uopt&&xopt)
+		ppsprint_aux();
+	else if(aopt&&xopt&&!uopt)
+		ppsprint_ax();
+	else if(aopt&&uopt&&!xopt)
+		ppsprint_au();
+	else if(!aopt&&uopt&&xopt)
+		get_username(UXOPT);
+	else{
+		printf("no such pps option.\n");
+		return 0;
+	}
+
+}
+
 int ppsopt_parse (char **buf){
 	
 	int aopt=0;
@@ -397,19 +479,39 @@ void ppsprint_aux(){
 			memset(tmpcmd,0,BUFSIZE);
 			char tmp[BUFSIZE];
 			memset(tmp,0,BUFSIZE);
+			if(ppspipe){
+				if(!strcmp(ppsinfo[l][_PID],match)){
 			sprintf(tmpcmd,"%6s %5s %3s %4s %5s %5s %5s %6s %6s %6s %s",ppsinfo[l][_USER],ppsinfo[l][_PID],ppsinfo[l][_CPU],ppsinfo[l][_MEM],ppsinfo[l][_VSZ],ppsinfo[l][_RSS], ppsinfo[l][_TTY],ppsinfo[l][_STAT],ppsinfo[l][_START], ppsinfo[l][_TIME], ppsinfo[l][_COMMAND]);
 			strncpy(tmp,tmpcmd,cmdlen);
 			printf("%s\n",tmp);
+			}
+				else if(!strcmp(ppsinfo[l][_COMMAND],match)){
+			sprintf(tmpcmd,"%6s %5s %3s %4s %5s %5s %5s %6s %6s %6s %s",ppsinfo[l][_USER],ppsinfo[l][_PID],ppsinfo[l][_CPU],ppsinfo[l][_MEM],ppsinfo[l][_VSZ],ppsinfo[l][_RSS], ppsinfo[l][_TTY],ppsinfo[l][_STAT],ppsinfo[l][_START], ppsinfo[l][_TIME], ppsinfo[l][_COMMAND]);
+			strncpy(tmp,tmpcmd,cmdlen);
+			printf("%s\n",tmp);
+				}
+			}
+			else{
+			sprintf(tmpcmd,"%6s %5s %3s %4s %5s %5s %5s %6s %6s %6s %s",ppsinfo[l][_USER],ppsinfo[l][_PID],ppsinfo[l][_CPU],ppsinfo[l][_MEM],ppsinfo[l][_VSZ],ppsinfo[l][_RSS], ppsinfo[l][_TTY],ppsinfo[l][_STAT],ppsinfo[l][_START], ppsinfo[l][_TIME], ppsinfo[l][_COMMAND]);
+			strncpy(tmp,tmpcmd,cmdlen);
+			printf("%s\n",tmp);
+			}
 	}
-
-
 }
 void ppsprint_none(char *ttyname){
 	printf("%5s %9s %6s %s \n","PID","TTY","TIME","COMMAND");
 	char time[BUFSIZE]="00:00:00";
 	for(int l=0;l<totaltasks;l++){
-		if(!strcmp(ppsinfo[l][_TTY],ttyname))
-			printf("%5s %9s %6s  %s \n",ppsinfo[l][_PID],ppsinfo[l][_TTY],time,ppsinfo[l][_COMMAND]);
+		if(!strcmp(ppsinfo[l][_TTY],ttyname)){
+			if(ppspipe){
+				if(!strcmp(ppsinfo[l][_PID],match))
+					printf("%5s %9s %6s  %s \n",ppsinfo[l][_PID],ppsinfo[l][_TTY],time,ppsinfo[l][_COMMAND]);
+				else if(!strcmp(ppsinfo[l][_COMMAND],match))
+						printf("%5s %9s %6s  %s \n",ppsinfo[l][_PID],ppsinfo[l][_TTY],time,ppsinfo[l][_COMMAND]);
+			}
+			else
+						printf("%5s %9s %6s  %s \n",ppsinfo[l][_PID],ppsinfo[l][_TTY],time,ppsinfo[l][_COMMAND]);
+		}
 	}
 
 
@@ -427,9 +529,24 @@ void ppsprint_a(){
 			memset(tmpcmd,0,BUFSIZE);
 			char tmp[BUFSIZE];
 			memset(tmp,0,BUFSIZE);
+			if(ppspipe){
+				if(!strcmp(ppsinfo[l][_PID],match)){
 			sprintf(tmpcmd,"%5s %9s %6s %6s %s",ppsinfo[l][_PID],ppsinfo[l][_TTY],ppsinfo[l][_STAT],ppsinfo[l][_TIME],ppsinfo[l][_COMMAND]);
 			strncpy(tmp,tmpcmd,cmdlen);
 			printf("%s\n",tmp);
+				}
+				else if(!strcmp(ppsinfo[l][_COMMAND],match)){
+			sprintf(tmpcmd,"%5s %9s %6s %6s %s",ppsinfo[l][_PID],ppsinfo[l][_TTY],ppsinfo[l][_STAT],ppsinfo[l][_TIME],ppsinfo[l][_COMMAND]);
+			strncpy(tmp,tmpcmd,cmdlen);
+			printf("%s\n",tmp);
+				}
+			}
+			else{
+				sprintf(tmpcmd,"%5s %9s %6s %6s %s",ppsinfo[l][_PID],ppsinfo[l][_TTY],ppsinfo[l][_STAT],ppsinfo[l][_TIME],ppsinfo[l][_COMMAND]);
+			strncpy(tmp,tmpcmd,cmdlen);
+			printf("%s\n",tmp);
+			}
+				
 		}
 	}
 }
@@ -444,9 +561,23 @@ void ppsprint_au(){
 			memset(tmpcmd,0,BUFSIZE);
 			char tmp[BUFSIZE];
 			memset(tmp,0,BUFSIZE);
+			if(ppspipe){
+				if(!strcmp(ppsinfo[l][_PID],match)){
 			sprintf(tmpcmd,"%6s %6s %3s %4s %4s %5s %5s %6s %6s %6s %9s",ppsinfo[l][_USER],ppsinfo[l][_PID],ppsinfo[l][_CPU],ppsinfo[l][_MEM],ppsinfo[l][_VSZ],ppsinfo[l][_RSS], ppsinfo[l][_TTY],ppsinfo[l][_STAT],ppsinfo[l][_START], ppsinfo[l][_TIME], ppsinfo[l][_COMMAND]);
 			strncpy(tmp,tmpcmd,cmdlen);
 			printf("%s\n",tmp);
+				}
+				else if(!strcmp(ppsinfo[l][_COMMAND],match)){
+			sprintf(tmpcmd,"%6s %6s %3s %4s %4s %5s %5s %6s %6s %6s %9s",ppsinfo[l][_USER],ppsinfo[l][_PID],ppsinfo[l][_CPU],ppsinfo[l][_MEM],ppsinfo[l][_VSZ],ppsinfo[l][_RSS], ppsinfo[l][_TTY],ppsinfo[l][_STAT],ppsinfo[l][_START], ppsinfo[l][_TIME], ppsinfo[l][_COMMAND]);
+			strncpy(tmp,tmpcmd,cmdlen);
+			printf("%s\n",tmp);
+				}
+			}
+			else{
+			sprintf(tmpcmd,"%6s %6s %3s %4s %4s %5s %5s %6s %6s %6s %9s",ppsinfo[l][_USER],ppsinfo[l][_PID],ppsinfo[l][_CPU],ppsinfo[l][_MEM],ppsinfo[l][_VSZ],ppsinfo[l][_RSS], ppsinfo[l][_TTY],ppsinfo[l][_STAT],ppsinfo[l][_START], ppsinfo[l][_TIME], ppsinfo[l][_COMMAND]);
+			strncpy(tmp,tmpcmd,cmdlen);
+			printf("%s\n",tmp);
+			}
 		}
 	}
 
@@ -462,9 +593,23 @@ void ppsprint_ax(){
 			memset(tmpcmd,0,BUFSIZE);
 			char tmp[BUFSIZE];
 			memset(tmp,0,BUFSIZE);
+			if(ppspipe){
+				if(!strcmp(ppsinfo[l][_PID],match)){
 			sprintf(tmpcmd,"%5s %9s %6s %6s %s",ppsinfo[l][_PID],ppsinfo[l][_TTY],ppsinfo[l][_STAT],ppsinfo[l][_TIME],ppsinfo[l][_COMMAND]);
 			strncpy(tmp,tmpcmd,cmdlen);
 			printf("%s\n",tmp);
+				}
+				else if(!strcmp(ppsinfo[l][_COMMAND],match)){
+			sprintf(tmpcmd,"%5s %9s %6s %6s %s",ppsinfo[l][_PID],ppsinfo[l][_TTY],ppsinfo[l][_STAT],ppsinfo[l][_TIME],ppsinfo[l][_COMMAND]);
+			strncpy(tmp,tmpcmd,cmdlen);
+			printf("%s\n",tmp);
+				}
+			}
+			else{
+			sprintf(tmpcmd,"%5s %9s %6s %6s %s",ppsinfo[l][_PID],ppsinfo[l][_TTY],ppsinfo[l][_STAT],ppsinfo[l][_TIME],ppsinfo[l][_COMMAND]);
+			strncpy(tmp,tmpcmd,cmdlen);
+			printf("%s\n",tmp);
+			}
 		}
 }
 void ppsprint_u(char *username){
@@ -479,9 +624,23 @@ void ppsprint_u(char *username){
 			memset(tmpcmd,0,BUFSIZE);
 			char tmp[BUFSIZE];
 			memset(tmp,0,BUFSIZE);
+			if(ppspipe){
+				if(!strcmp(ppsinfo[l][_PID],match)){
 			sprintf(tmpcmd,"%3s %5s %3s %4s %6s %6s %5s %5s %6s %6s %9s",ppsinfo[l][_USER],ppsinfo[l][_PID],ppsinfo[l][_CPU],ppsinfo[l][_MEM],ppsinfo[l][_VSZ],ppsinfo[l][_RSS], ppsinfo[l][_TTY],ppsinfo[l][_STAT],ppsinfo[l][_START], ppsinfo[l][_TIME], ppsinfo[l][_COMMAND]);
 			strncpy(tmp,tmpcmd,cmdlen);
 			printf("%s\n",tmp);
+				}
+				else if(!strcmp(ppsinfo[l][_COMMAND],match)){
+			sprintf(tmpcmd,"%3s %5s %3s %4s %6s %6s %5s %5s %6s %6s %9s",ppsinfo[l][_USER],ppsinfo[l][_PID],ppsinfo[l][_CPU],ppsinfo[l][_MEM],ppsinfo[l][_VSZ],ppsinfo[l][_RSS], ppsinfo[l][_TTY],ppsinfo[l][_STAT],ppsinfo[l][_START], ppsinfo[l][_TIME], ppsinfo[l][_COMMAND]);
+			strncpy(tmp,tmpcmd,cmdlen);
+			printf("%s\n",tmp);
+				}
+			}
+			else{
+			sprintf(tmpcmd,"%3s %5s %3s %4s %6s %6s %5s %5s %6s %6s %9s",ppsinfo[l][_USER],ppsinfo[l][_PID],ppsinfo[l][_CPU],ppsinfo[l][_MEM],ppsinfo[l][_VSZ],ppsinfo[l][_RSS], ppsinfo[l][_TTY],ppsinfo[l][_STAT],ppsinfo[l][_START], ppsinfo[l][_TIME], ppsinfo[l][_COMMAND]);
+			strncpy(tmp,tmpcmd,cmdlen);
+			printf("%s\n",tmp);
+			}
 		}
 		}
 	}
@@ -499,9 +658,23 @@ void ppsprint_ux(char *username){
 			memset(tmpcmd,0,BUFSIZE);
 			char tmp[BUFSIZE];
 			memset(tmp,0,BUFSIZE);
+			if(ppspipe){
+				if(!strcmp(ppsinfo[l][_PID],match)){
 			sprintf(tmpcmd,"%3s %5s %3s %4s %5s %6s %5s %6s %6s %6s %9s",ppsinfo[l][_USER],ppsinfo[l][_PID],ppsinfo[l][_CPU],ppsinfo[l][_MEM],ppsinfo[l][_VSZ],ppsinfo[l][_RSS], ppsinfo[l][_TTY],ppsinfo[l][_STAT],ppsinfo[l][_START], ppsinfo[l][_TIME], ppsinfo[l][_COMMAND]);
 			strncpy(tmp,tmpcmd,cmdlen);
 			printf("%s\n",tmp);
+				}
+				else if(!strcmp(ppsinfo[l][_COMMAND],match)){
+			sprintf(tmpcmd,"%3s %5s %3s %4s %5s %6s %5s %6s %6s %6s %9s",ppsinfo[l][_USER],ppsinfo[l][_PID],ppsinfo[l][_CPU],ppsinfo[l][_MEM],ppsinfo[l][_VSZ],ppsinfo[l][_RSS], ppsinfo[l][_TTY],ppsinfo[l][_STAT],ppsinfo[l][_START], ppsinfo[l][_TIME], ppsinfo[l][_COMMAND]);
+			strncpy(tmp,tmpcmd,cmdlen);
+			printf("%s\n",tmp);
+				}
+			}
+			else{
+			sprintf(tmpcmd,"%3s %5s %3s %4s %5s %6s %5s %6s %6s %6s %9s",ppsinfo[l][_USER],ppsinfo[l][_PID],ppsinfo[l][_CPU],ppsinfo[l][_MEM],ppsinfo[l][_VSZ],ppsinfo[l][_RSS], ppsinfo[l][_TTY],ppsinfo[l][_STAT],ppsinfo[l][_START], ppsinfo[l][_TIME], ppsinfo[l][_COMMAND]);
+			strncpy(tmp,tmpcmd,cmdlen);
+			printf("%s\n",tmp);
+			}
 		}
 	}
 }
@@ -516,9 +689,23 @@ void ppsprint_x(char *username){
 			memset(tmpcmd,0,BUFSIZE);
 			char tmp[BUFSIZE];
 			memset(tmp,0,BUFSIZE);
+			if(ppspipe){
+				if(!strcmp(ppsinfo[l][_PID],match)){
 			sprintf(tmpcmd,"%5s %9s %6s %6s %s",ppsinfo[l][_PID],ppsinfo[l][_TTY],ppsinfo[l][_STAT],ppsinfo[l][_TIME],ppsinfo[l][_COMMAND]);
 			strncpy(tmp,tmpcmd,cmdlen);
 			printf("%s\n",tmp);
+				}
+				else if(!strcmp(ppsinfo[l][_COMMAND],match)){
+			sprintf(tmpcmd,"%5s %9s %6s %6s %s",ppsinfo[l][_PID],ppsinfo[l][_TTY],ppsinfo[l][_STAT],ppsinfo[l][_TIME],ppsinfo[l][_COMMAND]);
+			strncpy(tmp,tmpcmd,cmdlen);
+			printf("%s\n",tmp);
+				}
+			}
+			else{
+			sprintf(tmpcmd,"%5s %9s %6s %6s %s",ppsinfo[l][_PID],ppsinfo[l][_TTY],ppsinfo[l][_STAT],ppsinfo[l][_TIME],ppsinfo[l][_COMMAND]);
+			strncpy(tmp,tmpcmd,cmdlen);
+			printf("%s\n",tmp);
+			}
 		}
 	}
 }
